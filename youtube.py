@@ -1,5 +1,6 @@
 from googleapiclient.discovery import build
 import googleapiclient.discovery
+from googleapiclient.errors import HttpError
 import psycopg2
 import pymongo
 import pandas as pd
@@ -125,7 +126,7 @@ def video_info(video_ids):
     return video_info
 
 #Comments Information
-from googleapiclient.errors import HttpError
+
 
 def video_comments(video_id):
     comment_details = []
@@ -187,184 +188,6 @@ def complete_channel_info(channel_id):
    
     return complete_channel_info
 
-#Channels Table
-def channels_tables():
-    
-    create_query='''create table if not exists channels(Channel_Name varchar(100),
-                                                            channel_Id varchar(80) primary key,
-                                                            Subscribers bigint,
-                                                            Views bigint,
-                                                            Total_Videos int,
-                                                            Channel_Description text,
-                                                            Playlist_Id varchar(80))'''
-    cursor.execute(create_query)
-    mydb.commit()
-
-ch_list = []
-db = client["Youtube_data"]
-collection = db["channel_details"]
-
-ch_data = collection.find({}, {"_id": 0, "Channel_Info": 1})
-for data in ch_data:
-    if "Channel_Info" in data:
-        ch_list.append(data["Channel_Info"])
-
-df = pd.DataFrame(ch_list)
-
-for index,row in df.iterrows():
-    insert_query='''insert into channels(Channel_Name, 
-                                    channel_Id,
-                                    Subscribers,
-                                    Views,
-                                    Total_Videos,
-                                    Channel_Description,
-                                    Playlist_Id)
-                                    
-                                    values(%s,%s,%s,%s,%s,%s,%s)
-                                    ON CONFLICT (channel_Id) DO NOTHING'''
-    values=(row["Channel_Name"],
-            row["Channel_Id"],
-            row["Subscribers"],
-            row["Views"],
-            row["Total_videos"],
-            row["Channel_Description"],
-            row["Playlist_Id"])
-
-    cursor.execute(insert_query,values)
-    mydb.commit()
-
-
-#Video Table
-def videos_table():
-    create_query = '''
-        CREATE TABLE IF NOT EXISTS videos (
-            Channel_Name VARCHAR(100),
-            Channel_Id VARCHAR(100),
-            Video_Id VARCHAR(30) PRIMARY KEY,
-            Title VARCHAR(150),
-            Tags TEXT,
-            Thumbnail VARCHAR(200),
-            Description TEXT,
-            Published_date TIMESTAMP,
-            Duration INTERVAL,
-            Views BIGINT,
-            Likes BIGINT,
-            Comments INT,
-            Favorite_Count INT,
-            Definition VARCHAR(10),
-            Caption_status VARCHAR(50)
-        )
-    '''
-    cursor.execute(create_query)
-    mydb.commit()
-    
-videos_table()
-
-vi_list = []
-db = client["Youtube_data"]
-collection = db["channel_details"]
-
-vi_data = collection.find_one({"Channel_Info.Channel_Name": "NATIVE FUSION"})
-if vi_data and "Video_Information" in vi_data:
-    vi_list = list(vi_data['Video_Information'].values())
-
-df2 = pd.DataFrame(vi_list)
-
-for index,row in df2.iterrows():
-    insert_query = '''insert into videos(Channel_Name,
-                                          Channel_Id,
-                                          Video_Id,
-                                          Title,
-                                          Tags,
-                                          Thumbnail,
-                                          Description,
-                                          Published_date,
-                                          Duration,
-                                          Views,
-                                          Likes,
-                                          Comments,
-                                          Favorite_Count,
-                                          Definition,
-                                          Caption_status)
-                                      values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                                      ON CONFLICT (Video_Id) DO NOTHING'''
-    values = (row["Channel_Name"],
-              row["Channel_Id"],
-              row["Video_Id"],
-              row["Title"],
-              row["Tags"],
-              row["Thumbnail"],
-              row["Description"],
-              row["Published_date"],
-              row["Duration"],
-              row["View_Count"],
-              row["Like_Count"],
-              row["Comment_Count"],
-              row["Favorite_Count"],
-              row["Definition"],
-              row["Caption_Status"])
-
-    
-    cursor.execute(insert_query, values)
-    mydb.commit()
-
-
-#Comments Table 
-def comments_table():
-        create_query='''create table if not exists comments(Video_Id varchar(50),
-                                                        Comment_Id varchar(100) primary key,
-                                                        Comment_Text text,
-                                                        Comment_Author varchar(150),
-                                                        Comment_Published timestamp
-                                                        )'''
-
-        cursor.execute(create_query)
-        mydb.commit()
-
-com_list = []
-db = client["Youtube_data"]
-collection = db["channel_details"]
-
-com_data = collection.find_one({}, {"_id": 0, "Video_Comments": 1})
-
-if com_data and "Video_Comments" in com_data:
-        for video_id, comments in com_data['Video_Comments'].items():
-                for comment in comments:
-                        com_list.append({
-                        "Video_Id": video_id,
-                        "Comment_Id": comment.get("Comment_Id", ""),
-                        "Comment_Text": comment.get("Comment_Text", ""),
-                        "Comment_Author": comment.get("Comment_Author", ""),
-                        "Comment_PublishedAt": comment.get("Comment_PublishedAt", "")
-                        })
-df3 = pd.DataFrame(com_list)
-
-for index,row in df3.iterrows():
-        insert_query='''insert into comments(Video_Id,
-                                                Comment_Id,
-                                                Comment_Text,
-                                                Comment_Author,
-                                                Comment_Published)
-                                                
-                                                values(%s,%s,%s,%s,%s)
-                                                ON CONFLICT (Comment_Id) DO NOTHING'''
-        
-        values=(row["Video_Id"],
-                row["Comment_Id"],
-                row["Comment_Text"],
-                row["Comment_Author"],
-                row["Comment_PublishedAt"])
-        cursor.execute(insert_query,values)
-        mydb.commit()
-#Tables
-def tables():
-    channels_tables()
-    videos_table()
-    comments_table()
-
-    return "Tables created...."
-
-
 #streamlit part
 
 st.header('YouTube Data Harvesting and Warehousing', divider='rainbow')
@@ -375,32 +198,206 @@ option = st.sidebar.selectbox("Select", ('', 'Data Store', 'Migrate', 'Questions
 
 if option == "Data Store":
     channel_id = st.sidebar.text_input("Enter the channel ID")
-    ch_list = []
+    ch_ids = []
     db = client["Youtube_data"]
     collection = db["channel_details"]
 
-    ch_data = collection.find({}, {"_id": 0, "Channel_Info": 1})
-    for data in ch_data:
-        if "Channel_Info" in data:
-            channel_info = data["Channel_Info"]
-            if "Channel_Id" in channel_info and "Channel_Name" in channel_info:
-                ch_list.append((channel_info["Channel_Name"], channel_info["Channel_Id"]))
+    for ch_data in collection.find({}, {"_id": 0, "Channel_Info": 1}):
+        ch_info = ch_data.get("Channel_Info")
+        if ch_info:
+            ch_id = ch_info.get("Channel_Id", "")
+            ch_name = ch_info.get("Channel_Name", "")
+            ch_ids.append((ch_name,ch_id))
 
-    df = pd.DataFrame(ch_list, columns=["Channel Name", "Channel ID"])
-    st.write(df)
-
-
-    if channel_id in ch_list:
+    df = pd.DataFrame(ch_ids, columns=["Channel Name","Channel ID"])
+    st.write(df) 
+    if channel_id in ch_ids:
         st.success("Channel Details of the given channel id already exists")
     else:
         insert = complete_channel_info(channel_id)
         st.success(insert)
+
 
 elif option == "Migrate":
     channel_name = st.sidebar.text_input("Enter the channel name")
     if channel_name:
         channel_exists = collection.find({"Channel_Info.Channel_Name": channel_name})
         if channel_exists:
+                        #Channels Table
+            def channels_tables():
+                
+                create_query='''create table if not exists channels(Channel_Name varchar(100),
+                                                                        channel_Id varchar(80) primary key,
+                                                                        Subscribers bigint,
+                                                                        Views bigint,
+                                                                        Total_Videos int,
+                                                                        Channel_Description text,
+                                                                        Playlist_Id varchar(80))'''
+                cursor.execute(create_query)
+                mydb.commit()
+
+            ch_list = []
+            db = client["Youtube_data"]
+            collection = db["channel_details"]
+
+            ch_data = collection.find_one({"Channel_Info.Channel_Name":channel_name})
+            if ch_data and "Channel_Info" in ch_data:
+                ch_list.append(ch_data['Channel_Info'])
+
+            df = pd.DataFrame(ch_list)
+
+            for index,row in df.iterrows():
+                insert_query='''insert into channels(Channel_Name, 
+                                                channel_Id,
+                                                Subscribers,
+                                                Views,
+                                                Total_Videos,
+                                                Channel_Description,
+                                                Playlist_Id)
+                                                
+                                                values(%s,%s,%s,%s,%s,%s,%s)
+                                                ON CONFLICT (channel_Id) DO NOTHING'''
+                values=(row["Channel_Name"],
+                        row["Channel_Id"],
+                        row["Subscribers"],
+                        row["Views"],
+                        row["Total_videos"],
+                        row["Channel_Description"],
+                        row["Playlist_Id"])
+
+                cursor.execute(insert_query,values)
+                mydb.commit()
+
+
+            #Video Table
+            def videos_table():
+                create_query = '''
+                    CREATE TABLE IF NOT EXISTS videos (
+                        Channel_Name VARCHAR(100),
+                        Channel_Id VARCHAR(100),
+                        Video_Id VARCHAR(30) PRIMARY KEY,
+                        Title VARCHAR(150),
+                        Tags TEXT,
+                        Thumbnail VARCHAR(200),
+                        Description TEXT,
+                        Published_date TIMESTAMP,
+                        Duration INTERVAL,
+                        Views BIGINT,
+                        Likes BIGINT,
+                        Comments INT,
+                        Favorite_Count INT,
+                        Definition VARCHAR(10),
+                        Caption_status VARCHAR(50)
+                    )
+                '''
+                cursor.execute(create_query)
+                mydb.commit()
+                
+            videos_table()
+
+            vi_list = []
+            db = client["Youtube_data"]
+            collection = db["channel_details"]
+
+            vi_data = collection.find_one({"Channel_Info.Channel_Name":channel_name})
+            if vi_data and "Video_Information" in vi_data:
+                vi_list = list(vi_data['Video_Information'].values())
+
+            df2 = pd.DataFrame(vi_list)
+
+            for index,row in df2.iterrows():
+                insert_query = '''insert into videos(Channel_Name,
+                                                    Channel_Id,
+                                                    Video_Id,
+                                                    Title,
+                                                    Tags,
+                                                    Thumbnail,
+                                                    Description,
+                                                    Published_date,
+                                                    Duration,
+                                                    Views,
+                                                    Likes,
+                                                    Comments,
+                                                    Favorite_Count,
+                                                    Definition,
+                                                    Caption_status)
+                                                values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                                                ON CONFLICT (Video_Id) DO NOTHING'''
+                values = (row["Channel_Name"],
+                        row["Channel_Id"],
+                        row["Video_Id"],
+                        row["Title"],
+                        row["Tags"],
+                        row["Thumbnail"],
+                        row["Description"],
+                        row["Published_date"],
+                        row["Duration"],
+                        row["View_Count"],
+                        row["Like_Count"],
+                        row["Comment_Count"],
+                        row["Favorite_Count"],
+                        row["Definition"],
+                        row["Caption_Status"])
+
+                
+                cursor.execute(insert_query, values)
+                mydb.commit()
+
+
+            #Comments Table 
+            def comments_table():
+                    create_query='''create table if not exists comments(Video_Id varchar(50),
+                                                                    Comment_Id varchar(100) primary key,
+                                                                    Comment_Text text,
+                                                                    Comment_Author varchar(150),
+                                                                    Comment_Published timestamp
+                                                                    )'''
+
+                    cursor.execute(create_query)
+                    mydb.commit()
+
+            com_list = []
+            db = client["Youtube_data"]
+            collection = db["channel_details"]
+
+            com_data = collection.find_one({}, {"_id": 0, "Video_Comments": 1})
+
+            if com_data and "Video_Comments" in com_data:
+                    for video_id, comments in com_data['Video_Comments'].items():
+                            for comment in comments:
+                                    com_list.append({
+                                    "Video_Id": video_id,
+                                    "Comment_Id": comment.get("Comment_Id", ""),
+                                    "Comment_Text": comment.get("Comment_Text", ""),
+                                    "Comment_Author": comment.get("Comment_Author", ""),
+                                    "Comment_PublishedAt": comment.get("Comment_PublishedAt", "")
+                                    })
+            df3 = pd.DataFrame(com_list)
+
+            for index,row in df3.iterrows():
+                    insert_query='''insert into comments(Video_Id,
+                                                            Comment_Id,
+                                                            Comment_Text,
+                                                            Comment_Author,
+                                                            Comment_Published)
+                                                            
+                                                            values(%s,%s,%s,%s,%s)
+                                                            ON CONFLICT (Comment_Id) DO NOTHING'''
+                    
+                    values=(row["Video_Id"],
+                            row["Comment_Id"],
+                            row["Comment_Text"],
+                            row["Comment_Author"],
+                            row["Comment_PublishedAt"])
+                    cursor.execute(insert_query,values)
+                    mydb.commit()
+            #Tables
+            def tables():
+                channels_tables()
+                videos_table()
+                comments_table()
+
+                return "Tables created...."
             Table = tables()
             st.success(Table)
         else:
