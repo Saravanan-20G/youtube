@@ -187,8 +187,6 @@ def complete_channel_info(channel_id):
    
     return complete_channel_info
 
-
-
 #Channels Table
 def channels_tables():
     
@@ -259,22 +257,18 @@ def videos_table():
     '''
     cursor.execute(create_query)
     mydb.commit()
-
+    
+videos_table()
 
 vi_list = []
 db = client["Youtube_data"]
 collection = db["channel_details"]
 
-vi_data = collection.find({}, {"_id": 0, "Video_Information": 1})
-
+vi_data = collection.find_one({"Channel_Info.Channel_Name": "NATIVE FUSION"})
 if vi_data and "Video_Information" in vi_data:
-    ids = list(vi_data['Video_Information'])
-    
-    for i in ids:
-        vi_list.append(vi_data['Video_Information'][i])
+    vi_list = list(vi_data['Video_Information'].values())
 
 df2 = pd.DataFrame(vi_list)
-
 
 for index,row in df2.iterrows():
     insert_query = '''insert into videos(Channel_Name,
@@ -314,6 +308,7 @@ for index,row in df2.iterrows():
     cursor.execute(insert_query, values)
     mydb.commit()
 
+
 #Comments Table 
 def comments_table():
         create_query='''create table if not exists comments(Video_Id varchar(50),
@@ -330,7 +325,7 @@ com_list = []
 db = client["Youtube_data"]
 collection = db["channel_details"]
 
-com_data = collection.find({}, {"_id": 0, "Video_Comments": 1})
+com_data = collection.find_one({}, {"_id": 0, "Video_Comments": 1})
 
 if com_data and "Video_Comments" in com_data:
         for video_id, comments in com_data['Video_Comments'].items():
@@ -372,16 +367,14 @@ def tables():
 
 #streamlit part
 
+st.header('YouTube Data Harvesting and Warehousing', divider='rainbow')
 
-st.header('YouTube Data Harvesting and Warehousing',divider='rainbow')
+option = st.sidebar.selectbox("Select", ('', 'Data Store', 'Migrate', 'Questions'))
 
-option = st.sidebar.selectbox("Select",('','Data Store', 'Migrate', 'Questions'))
 
-channel_id=st.sidebar.text_input("Enter the channel ID")
 
-st.write('You selected:', option)
-
-if option=="Data Store":
+if option == "Data Store":
+    channel_id = st.sidebar.text_input("Enter the channel ID")
     ch_list = []
     db = client["Youtube_data"]
     collection = db["channel_details"]
@@ -389,34 +382,44 @@ if option=="Data Store":
     ch_data = collection.find({}, {"_id": 0, "Channel_Info": 1})
     for data in ch_data:
         if "Channel_Info" in data:
-            ch_list.append(data["Channel_Info"])
+            channel_info = data["Channel_Info"]
+            if "Channel_Id" in channel_info and "Channel_Name" in channel_info:
+                ch_list.append((channel_info["Channel_Name"], channel_info["Channel_Id"]))
 
-    df = pd.DataFrame(ch_list)
+    df = pd.DataFrame(ch_list, columns=["Channel Name", "Channel ID"])
     st.write(df)
+
 
     if channel_id in ch_list:
         st.success("Channel Details of the given channel id already exists")
-        
     else:
-        insert=complete_channel_info(channel_id) 
+        insert = complete_channel_info(channel_id)
         st.success(insert)
-        
-elif option=="Migtate":
-    
-    Table=tables()
-    st.success(Table)
 
-if option=="Questions":
+elif option == "Migrate":
+    channel_name = st.sidebar.text_input("Enter the channel name")
+    if channel_name:
+        channel_exists = collection.find({"Channel_Info.Channel_Name": channel_name})
+        if channel_exists:
+            Table = tables()
+            st.success(Table)
+        else:
+            st.error("Channel Name not found in MongoDB. Please enter a valid channel name.")
+    else:
+        st.warning("Please enter a channel name before migrating.")
+
+
+elif option == "Questions":
     question=st.sidebar.selectbox("Select your question",("1. What are the names of all the videos and their corresponding channels?",
-                                              "2. Which channels have the most number of videos, and how many videos do they have?",
-                                              "3. What are the top 10 most viewed videos and their respective channels?",
-                                              "4. How many comments were made on each video, and what are their corresponding video names?",
-                                              "5. Which videos have the highest number of likes, and what are their corresponding channel names?",
-                                              "6. What is the total number of likes for each video, and what are their corresponding video names?",
-                                              "7. What is the total number of views for each channel, and what are their corresponding channel names?",
-                                              "8. What are the names of all the channels that have published videos in the year 2022?",
-                                              "9. What is the average duration of all videos in each channel, and what are their corresponding channel names?",
-                                              "10. Which videos have the highest number of comments, and what are their corresponding channel names?"))
+                                        "2. Which channels have the most number of videos, and how many videos do they have?",
+                                        "3. What are the top 10 most viewed videos and their respective channels?",
+                                        "4. How many comments were made on each video, and what are their corresponding video names?",
+                                        "5. Which videos have the highest number of likes, and what are their corresponding channel names?",
+                                        "6. What is the total number of likes for each video, and what are their corresponding video names?",
+                                        "7. What is the total number of views for each channel, and what are their corresponding channel names?",
+                                        "8. What are the names of all the channels that have published videos in the year 2022?",
+                                        "9. What is the average duration of all videos in each channel, and what are their corresponding channel names?",
+                                        "10. Which videos have the highest number of comments, and what are their corresponding channel names?"))
 
     if question=="1. What are the names of all the videos and their corresponding channels?":
         query1='''select title as videos,channel_name as channelname from videos'''
@@ -505,5 +508,6 @@ if option=="Questions":
         t10=cursor.fetchall()
         df10=pd.DataFrame(t10,columns=["Title","Channel_Name","Comment_Count"])
         st.write(df10)
+       
 
 
