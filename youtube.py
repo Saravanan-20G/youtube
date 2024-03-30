@@ -186,7 +186,7 @@ def complete_channel_info(channel_id):
     })
     
    
-    return complete_channel_info
+    return "Datas Stored"
 
 #streamlit part
 
@@ -211,11 +211,12 @@ if option == "Data Store":
 
     df = pd.DataFrame(ch_ids, columns=["Channel Name","Channel ID"])
     st.write(df) 
-    if channel_id in ch_ids:
+    if channel_id in df["Channel ID"].tolist():
         st.success("Channel Details of the given channel id already exists")
     else:
-        insert = complete_channel_info(channel_id)
-        st.success(insert)
+        if channel_id:
+            insert = complete_channel_info(channel_id)
+            st.success(insert)
 
 
 elif option == "Migrate":
